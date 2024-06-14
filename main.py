@@ -3,54 +3,38 @@ import cv2
 import math
 
 # constantes de ajuste
-ghosting_level = 1
-# multiplicador da amplitude (0 = neutro/desliga)  
-ghosting_freq = 3
-# 2 ou menos desliga
-# valores altos pegam frequencias centrais/menores
+bleeding_level = 1
+#cores fora de fase 0=não muda
 
-def hBlending(input_img):
-    input_img = cv2.GaussianBlur(input_img, (15, 15), 0)
+def bloom(input_img):
+    w = input_img.shape[1]
+    scale = round(w/640)
+    k = 1 + scale
+    morph_k = np.ones((k, k), np.uint8)
+    aux = cv2.dilate(input_img[:, :, 0], morph_k, iterations=1)
+    input_img[:, :, 0] = (input_img[:, :, 0] + aux)/2
+    return input_img
+
+def blur(input_img):
+    w = input_img.shape[1]
+    scale = round(w/640)
+    k = 1 + (1*scale)
+    input_img = cv2.blur(input_img, (k, k))#cv2.GaussianBlur(input_img, (k, 1), 0)
+    
+    return input_img    
+    
+def chromaDephase(input_img):
+    w = input_img.shape[1]
+    h = input_img.shape[0]
+    scale = round(w/640)
+    #chroma
+    input_img[:, :, 1] = cv2.warpAffine(input_img[:, :, 1], np.float32([[1, 0, bleeding_level*scale], [0, 1, 0]]), (w, h))
+    input_img[:, :, 2] = cv2.warpAffine(input_img[:, :, 2], np.float32([[1, 0, -bleeding_level*scale], [0, 1, 0]]), (w, h))
+       
     return input_img
 
 def ghosting(input_img):
-    if ghosting_freq > 2 and ghosting_level > 0:
-        base = np.copy(input_img[:, :, 0])
-        rows, cols = base.shape
-        beta = np.max(base)
-        alpha = np.min(base)
-
-        opt_rows = cv2.getOptimalDFTSize(rows)
-        opt_cols = cv2.getOptimalDFTSize(cols)
-        right = opt_cols - cols
-        bottom = opt_rows - rows
-        base_padded = cv2.copyMakeBorder(
-            base, 0, bottom, 0, right, cv2.BORDER_CONSTANT, value=0
-        )
-        dft = cv2.dft(base_padded, flags=cv2.DFT_COMPLEX_OUTPUT)
-        dft = np.fft.fftshift(dft)
-
-        # Máscara multiplicando as frequências altas
-        center_col = opt_cols // 2
-        center_row = opt_rows // 2
-        j_radius = 1 + (opt_cols / ghosting_freq)
-        i_radius = 1 + (opt_rows / ghosting_freq)
-        mask = np.ones((opt_rows, opt_cols, 2), np.float32)
-        for i in range(opt_rows):
-            for j in range(opt_cols):
-                if abs(i - center_row) > i_radius or abs(j - center_col) > j_radius:
-                    mask[i, j] = 0#1 + ghosting_level
-        #dft *= mask
-        cv2.imshow("input", dft[:, :, 0])
-        cv2.waitKey()
-        dft_out = np.fft.ifftshift(dft)
-        dft_out = cv2.idft(dft_out)
-        dft_out = cv2.magnitude(dft_out[:, :, 0], dft_out[:, :, 1])
-        # crop no padding
-        dft_out = dft_out[:rows, :cols]
-        cv2.normalize(dft_out, dft_out, alpha, beta, cv2.NORM_MINMAX)
-
-        input_img[:, :, 0] = dft_out
+    #implementar
 
     return input_img
 
@@ -76,13 +60,10 @@ def colorYIQRGB(input_img):
         + (0.619 * input_img[:, :, 2])
     )
 
-    # bgr **= (1/2.2)
-
     return bgr
 
 
 def colorRGB2YIQ(input_img):
-    # input_img **= 2.2
     yiq = np.copy(input_img) * 0
 
     yiq[:, :, 0] = (
@@ -106,16 +87,18 @@ def colorRGB2YIQ(input_img):
 
 
 def main():
-    input_img = cv2.imread("02.png").astype(np.float32) / 255
+    input_img = cv2.imread("01.png").astype(np.float32) / 255
 
     yiq = colorRGB2YIQ(input_img)
-    yiq = ghosting(yiq)
-    yiq = hBlending(yiq)
-    bgr = colorYIQRGB(yiq)
-
-    cv2.imshow("yiq", input_img)
+    yiq = chromaDephase(yiq)
+    yiq = bloom(yiq)
+    
+    bgr = colorYIQRGB(yiq)    
+    bgr = blur(bgr)
+    
+    cv2.imshow("yiq", bgr)
     cv2.waitKey()
-    cv2.imshow("convert", bgr)
+    cv2.imshow("convert", input_img)
     cv2.waitKey()
     cv2.destroyAllWindows()
 
