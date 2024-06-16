@@ -85,6 +85,15 @@ def colorRGB2YIQ(input_img):
     )
     return yiq
 
+def scanline(img, intensity=0.6):
+    scanline_img = np.copy(img)
+    
+    # Itera de duas em duas linhas
+    for i in range(0, scanline_img.shape[0], 2):
+        # Diminui o brilho da linha
+        scanline_img[i] = scanline_img[i] * intensity
+    
+    return scanline_img
 
 def main():
     input_img = cv2.imread("01.png").astype(np.float32) / 255
