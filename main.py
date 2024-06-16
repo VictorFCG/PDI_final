@@ -34,7 +34,7 @@ def chromaDephase(input_img):
     return input_img
 
 def ghosting(input_img):
-    #implementar
+    # ainda não deu certo
 
     return input_img
 
@@ -85,7 +85,7 @@ def colorRGB2YIQ(input_img):
     )
     return yiq
 
-def scanline(img, intensity=0.6):
+def scanline(img, intensity=0.65):
     scanline_img = np.copy(img)
     
     # Itera de duas em duas linhas
@@ -94,6 +94,10 @@ def scanline(img, intensity=0.6):
         scanline_img[i] = scanline_img[i] * intensity
     
     return scanline_img
+
+def filmGrain (img):
+    #implementar
+    return img
 
 def main():
     input_img = cv2.imread("01.png").astype(np.float32) / 255
@@ -104,6 +108,7 @@ def main():
     
     bgr = colorYIQRGB(yiq)    
     bgr = blur(bgr)
+    bgr = scanline(bgr)
     
     cv2.imshow("yiq", bgr)
     cv2.waitKey()
