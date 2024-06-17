@@ -3,33 +3,53 @@ import cv2
 import math
 
 # constantes de ajuste
+#_________________________________________________________________________
+#defasagem do chroma 0=não muda
 bleeding_level = 1
-#cores fora de fase 0=não muda
+#faixa de intensidade/aplicação do bloom
+bloom_threshold = 0.5
+#ganho de iluminação máximo
+bloom_cap = 0.12
+#scanline intensidade
+sl_intensity=0.65
 
 def bloom(input_img):
-    w = input_img.shape[1]
-    scale = round(w/640)
-    k = 1 + scale
-    morph_k = np.ones((k, k), np.uint8)
-    aux = cv2.dilate(input_img[:, :, 0], morph_k, iterations=1)
-    input_img[:, :, 0] = (input_img[:, :, 0] + aux)/2
+    base = cv2.cvtColor(input_img, cv2.COLOR_BGR2GRAY)
+    scale = round(base.shape[1]/16)
+    k = 1 + (2*scale)
+    threshold = np.max(base) * bloom_threshold
+    #brightpass
+    bpass = np.where(base < threshold, 0, base)
+    #blur
+    total = bpass * 0
+    for i in range(4):
+        gblur = cv2.GaussianBlur(bpass, (k, k), 0)
+        total += gblur    
+    #limitando aumento de intensidade e testando parâmetros
+    total *= bloom_cap
+    total += 1
+    for c in range(3):
+        input_img[:, :, c] *= total    
+    #truncamento
+    input_img = np.clip(input_img, 0, 1.0)    
     return input_img
 
 def blur(input_img):
     w = input_img.shape[1]
     scale = round(w/640)
-    k = 1 + (1*scale)
-    input_img = cv2.blur(input_img, (k, k))#cv2.GaussianBlur(input_img, (k, 1), 0)
+    k = 1 + (2*scale)
+    input_img = cv2.blur(input_img, (k, 1))
     
     return input_img    
     
 def chromaDephase(input_img):
-    w = input_img.shape[1]
-    h = input_img.shape[0]
-    scale = round(w/640)
-    #chroma
-    input_img[:, :, 1] = cv2.warpAffine(input_img[:, :, 1], np.float32([[1, 0, bleeding_level*scale], [0, 1, 0]]), (w, h))
-    input_img[:, :, 2] = cv2.warpAffine(input_img[:, :, 2], np.float32([[1, 0, -bleeding_level*scale], [0, 1, 0]]), (w, h))
+    if(bleeding_level != 0):
+        w = input_img.shape[1]
+        h = input_img.shape[0]
+        scale = round(w/640)
+        #chroma
+        input_img[:, :, 1] = cv2.warpAffine(input_img[:, :, 1], np.float32([[1, 0, bleeding_level*scale], [0, 1, 0]]), (w, h))
+        input_img[:, :, 2] = cv2.warpAffine(input_img[:, :, 2], np.float32([[1, 0, -bleeding_level*scale], [0, 1, 0]]), (w, h))
        
     return input_img
 
@@ -85,13 +105,13 @@ def colorRGB2YIQ(input_img):
     )
     return yiq
 
-def scanline(img, intensity=0.65):
+def scanline(img):
     scanline_img = np.copy(img)
     
     # Itera de duas em duas linhas
     for i in range(0, scanline_img.shape[0], 2):
         # Diminui o brilho da linha
-        scanline_img[i] = scanline_img[i] * intensity
+        scanline_img[i] = scanline_img[i] * sl_intensity
     
     return scanline_img
 
@@ -104,11 +124,11 @@ def main():
 
     yiq = colorRGB2YIQ(input_img)
     yiq = chromaDephase(yiq)
-    yiq = bloom(yiq)
+    yiq = blur(yiq)
     
     bgr = colorYIQRGB(yiq)    
-    bgr = blur(bgr)
     bgr = scanline(bgr)
+    bgr = bloom(bgr)
     
     cv2.imshow("yiq", bgr)
     cv2.waitKey()
