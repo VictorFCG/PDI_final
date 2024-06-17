@@ -1,6 +1,6 @@
 # Filtro CRT
 ## Autores:
 ### Catarina
-### Victor
+### Victor Filipe Coelho Guimarães
 ## Resumo:
-## Trabalho da disciplina de processamento digital de imagens. Emulação das característica de uma imagem de sinal analógico exibidas em um painel CRT.   
+## Trabalho da disciplina de processamento digital de imagens. Simulação das característica de uma imagem de sinal analógico exibidas em um painel CRT.   
