@@ -107,12 +107,16 @@ def colorRGB2YIQ(input_img):
 
 def scanline(img):
     scanline_img = np.copy(img)
-    
+    w = img.shape[1]
+    h = img.shape[0]
+    scanline_img = cv2.resize(scanline_img, (w, 480))    
     # Itera de duas em duas linhas
     for i in range(0, scanline_img.shape[0], 2):
         # Diminui o brilho da linha
         scanline_img[i] = scanline_img[i] * sl_intensity
     
+    
+    scanline_img = cv2.resize(scanline_img, (w, h))
     return scanline_img
 
 def filmGrain (img):
