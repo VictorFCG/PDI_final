@@ -1,6 +1,7 @@
 import numpy as np
 import cv2
 import math
+import time
 
 # constantes de ajuste
 #_________________________________________________________________________
@@ -13,11 +14,11 @@ bloom_cap = 0.12
 #scanline intensidade
 sl_intensity=0.65
 # Porcentagem da imagem que terá grãos
-grain_amount = 0.0075
-# Tamanho médio dos grãos  
-grain_size = 0.5
+grain_amount = 0.3
 # Intensidade dos grãos
-grain_intensity = 15
+grain_intensity = 0.15
+# Fator de curvatura
+strength = 0.1
 
 
 def bloom(input_img):
@@ -112,6 +113,7 @@ def colorRGB2YIQ(input_img):
     )
     return yiq
 
+
 def scanline(img):
     scanline_img = np.copy(img)
     w = img.shape[1]
@@ -125,40 +127,48 @@ def scanline(img):
     scanline_img = cv2.resize(scanline_img, (w, h))
     return scanline_img
 
-def filmGrain(u, grain_amount, grain_size, grain_intensity):
-    m, n, c = u.shape
-    grain_image = np.zeros((m, n, c))
 
-    # Cria grid de índices para as dimensões da imagem
-    y_indices, x_indices = np.ogrid[:m, :n]
+def generateGaussianNoiseMask(shape, grain_intensity):
+    m, n, c = shape
+    # Gera ruído Gaussiano
+    noise_mask = np.random.normal(loc=0, scale=grain_intensity, size=(m, n, c))
+    return noise_mask
+
+
+def applyNoiseMask(img, noise_mask, grain_amount):
+    # Aplica a máscara de ruído à imagem
+    noisy_img = img + grain_amount * noise_mask
+    noisy_img = np.clip(noisy_img, 0, 1.0)
+    return noisy_img
+
+
+def applyCurvedBorderEffect(img, strength):
+    height, width = img.shape[:2]
+    # Gera grid com centro em (0, 0) para aplicar simetricamente a distorção de "barril"
+    x, y = np.meshgrid(np.linspace(-1, 1, width), np.linspace(-1, 1, height))
+
+    # Calcula o raio (distância do centro)
+    r = np.sqrt(x**2 + y**2)
+
+    # Calcula o ângulo da coordenada polar
+    theta = np.arctan2(y, x)
+    # Aplica a distorção de barril
+    rad = r + strength * r**2
     
-    num_grains = int(grain_amount * m * n)
+    # Normaliza as coordenadas 
+    map_x = width * (rad * np.cos(theta) + 1) / 2
+    map_y = height * (rad * np.sin(theta) + 1) / 2
+    
+    # Remapeia a imagem usando as coordenadas
+    distorted_image = cv2.remap(img, map_x.astype(np.float32), map_y.astype(np.float32), interpolation=cv2.INTER_LINEAR)
 
-    # Gera as posições e raios dos grãos aleatoriamente
-    for _ in range(num_grains):
-        # Seleciona aleatoriamente uma posição na imagem
-        x = np.random.randint(0, m)
-        y = np.random.randint(0, n)
+    return distorted_image
 
-        # Gera um raio aleatório para o grão usando dist. normal centrada em grain_size
-        radius = np.random.normal(loc=grain_size, scale=grain_size / 2)
-
-        # Cria uma máscara circular com centro em (x, y) com o raio calculado
-        mask = (x_indices - y) ** 2 + (y_indices - x) ** 2 <= radius ** 2
-
-        # Intensidade do grão aleatória dentro da faixa determinada por grain_intensity
-        intensity = np.random.uniform(-grain_intensity, grain_intensity)
-        
-        # Aplica a intensidade em grain_image nas posições definidas pela máscara
-        grain_image[mask] += intensity
-
-    v = u + grain_image
-    v = np.clip(v, 0, 1.0)
-
-    return v
 
 def main():
     input_img = cv2.imread("05.png").astype(np.float32) / 255
+
+    start_time = time.process_time()
 
     yiq = colorRGB2YIQ(input_img)
     yiq = chromaDephase(yiq)
@@ -167,9 +177,14 @@ def main():
     bgr = colorYIQRGB(yiq)    
     bgr = scanline(bgr)
     bgr = bloom(bgr)
-    bgr = filmGrain(bgr, grain_amount, grain_size, grain_intensity)
+
+    noise_mask = generateGaussianNoiseMask(bgr.shape, grain_intensity)
+    bgr = applyNoiseMask(bgr, noise_mask, grain_amount)
+    bgr = applyCurvedBorderEffect(bgr, strength)
 
     cv2.imshow("final", bgr)
+
+    print(f"--- {time.process_time() - start_time:.6f} seconds ---")
 
     cv2.waitKey()
     cv2.imshow("convert", input_img)
