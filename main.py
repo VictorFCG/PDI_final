@@ -18,7 +18,9 @@ grain_amount = 0.3
 # Intensidade dos grãos
 grain_intensity = 0.15
 # Fator de curvatura
-strength = 0.1
+curve_strength = 0.1
+# Fator de escurescimento
+darkening_strength = 0.15
 
 
 def bloom(input_img):
@@ -42,6 +44,7 @@ def bloom(input_img):
     input_img = np.clip(input_img, 0, 1.0)    
     return input_img
 
+
 def blur(input_img):
     w = input_img.shape[1]
     scale = round(w/640)
@@ -49,7 +52,8 @@ def blur(input_img):
     input_img = cv2.blur(input_img, (k, 1))
     
     return input_img    
-    
+
+
 def chromaDephase(input_img):
     if(bleeding_level != 0):
         w = input_img.shape[1]
@@ -60,6 +64,7 @@ def chromaDephase(input_img):
         input_img[:, :, 2] = cv2.warpAffine(input_img[:, :, 2], np.float32([[1, 0, -bleeding_level*scale], [0, 1, 0]]), (w, h))
        
     return input_img
+
 
 def ghosting(input_img):
     # ainda não deu certo
@@ -128,7 +133,7 @@ def scanline(img):
     return scanline_img
 
 
-def generateGaussianNoiseMask(shape, grain_intensity):
+def gaussianNoiseMask(shape, grain_intensity):
     m, n, c = shape
     # Gera ruído Gaussiano
     noise_mask = np.random.normal(loc=0, scale=grain_intensity, size=(m, n, c))
@@ -142,13 +147,18 @@ def applyNoiseMask(img, noise_mask, grain_amount):
     return noisy_img
 
 
-def applyCurvedBorderEffect(img, strength):
-    height, width = img.shape[:2]
-    # Gera grid com centro em (0, 0) para aplicar simetricamente a distorção de "barril"
+def coordinatesGrid(width, height):
+    # Gera grid com centro em (0, 0) das coordenadas
     x, y = np.meshgrid(np.linspace(-1, 1, width), np.linspace(-1, 1, height))
+    # Calcula o raio (distância do centro) dos pixels
+    distance = np.sqrt(x**2 + y**2)     
+    return x, y, distance
 
-    # Calcula o raio (distância do centro)
-    r = np.sqrt(x**2 + y**2)
+
+def curvedBorders(img, strength):
+    height, width = img.shape[:2]
+
+    x, y, r = coordinatesGrid(width, height)
 
     # Calcula o ângulo da coordenada polar
     theta = np.arctan2(y, x)
@@ -164,6 +174,21 @@ def applyCurvedBorderEffect(img, strength):
 
     return distorted_image
 
+    
+def darkerBorders(img, strength):
+    height, width = img.shape[:2]
+
+    _, _, distance = coordinatesGrid(width, height)
+    
+    # Cria a máscara com base na distância
+    mask = np.clip(1 - strength * distance, 0, 1)
+    
+    # Aplica a máscara
+    for i in range(3):
+        img[:, :, i] *= mask
+    
+    return img
+
 
 def main():
     input_img = cv2.imread("05.png").astype(np.float32) / 255
@@ -178,9 +203,10 @@ def main():
     bgr = scanline(bgr)
     bgr = bloom(bgr)
 
-    noise_mask = generateGaussianNoiseMask(bgr.shape, grain_intensity)
+    noise_mask = gaussianNoiseMask(bgr.shape, grain_intensity)
     bgr = applyNoiseMask(bgr, noise_mask, grain_amount)
-    bgr = applyCurvedBorderEffect(bgr, strength)
+    bgr = darkerBorders(bgr, darkening_strength)
+    bgr = curvedBorders(bgr, curve_strength)
 
     cv2.imshow("final", bgr)
 
