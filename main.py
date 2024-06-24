@@ -6,13 +6,13 @@ import time
 # constantes de ajuste
 #_________________________________________________________________________
 #defasagem do chroma 0=não muda
-bleeding_level = 1
+bleeding_level = 2
 #faixa de intensidade/aplicação do bloom
 bloom_threshold = 0.5
 #ganho de iluminação máximo
 bloom_cap = 0.12
 #scanline intensidade
-sl_intensity=0.65
+sl_intensity = 0.5
 # Porcentagem da imagem que terá grãos
 grain_amount = 0.3
 # Intensidade dos grãos
@@ -21,8 +21,10 @@ grain_intensity = 0.15
 curve_strength = 0.1
 # Fator de escurescimento
 darkening_strength = 0.15
-
-
+#Rainbow effect - multiplicador de freq da função periódica
+rb_mult = 20
+#Rainbow effect - intensidade do efeito - 0=off
+rb_int = 0.3
 def bloom(input_img):
     base = cv2.cvtColor(input_img, cv2.COLOR_BGR2GRAY)
     scale = round(base.shape[1]/16)
@@ -50,7 +52,6 @@ def blur(input_img):
     scale = round(w/640)
     k = 1 + (2*scale)
     input_img = cv2.blur(input_img, (k, 1))
-    
     return input_img    
 
 
@@ -61,16 +62,9 @@ def chromaDephase(input_img):
         scale = round(w/640)
         #chroma
         input_img[:, :, 1] = cv2.warpAffine(input_img[:, :, 1], np.float32([[1, 0, bleeding_level*scale], [0, 1, 0]]), (w, h))
-        input_img[:, :, 2] = cv2.warpAffine(input_img[:, :, 2], np.float32([[1, 0, -bleeding_level*scale], [0, 1, 0]]), (w, h))
+        input_img[:, :, 2] = cv2.warpAffine(input_img[:, :, 2], np.float32([[1, 0, bleeding_level*scale], [0, 1, 0]]), (w, h))        
        
     return input_img
-
-
-def ghosting(input_img):
-    # ainda não deu certo
-
-    return input_img
-
 
 def colorYIQRGB(input_img):
     bgr = np.copy(input_img) * 0
@@ -189,6 +183,15 @@ def darkerBorders(img, strength):
     
     return img
 
+def rainbowEffect(input_img):
+    # Aplicar uma função periódica em um canal de cor
+    if rb_int > 0:
+        w = input_img.shape[1]
+        for j in range(w):
+            sine = (1 - rb_int) + rb_int * np.sin(rb_mult * 3 * j / w)
+            input_img[:, j, 1] *= sine
+    
+    return input_img
 
 def main():
     input_img = cv2.imread("05.png").astype(np.float32) / 255
@@ -198,22 +201,20 @@ def main():
     yiq = colorRGB2YIQ(input_img)
     yiq = chromaDephase(yiq)
     yiq = blur(yiq)
-    
-    bgr = colorYIQRGB(yiq)    
-    bgr = scanline(bgr)
-    bgr = bloom(bgr)
-
+    yiq = rainbowEffect(yiq)
+    bgr = colorYIQRGB(yiq)
     noise_mask = gaussianNoiseMask(bgr.shape, grain_intensity)
-    bgr = applyNoiseMask(bgr, noise_mask, grain_amount)
+    bgr = applyNoiseMask(bgr, noise_mask, grain_amount)    
+    bgr = bloom(bgr.astype(np.float32))
+    bgr = scanline(bgr)
     bgr = darkerBorders(bgr, darkening_strength)
     bgr = curvedBorders(bgr, curve_strength)
 
-    cv2.imshow("final", bgr)
-
     print(f"--- {time.process_time() - start_time:.6f} seconds ---")
 
-    cv2.waitKey()
-    cv2.imshow("convert", input_img)
+    cv2.imshow("final", bgr)
+    cv2.waitKey()        
+    cv2.imshow("inicial", input_img)
     cv2.waitKey()
     cv2.destroyAllWindows()
 
