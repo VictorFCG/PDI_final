@@ -20,11 +20,13 @@ grain_intensity = 0.15
 # Fator de curvatura
 curve_strength = 0.1
 # Fator de escurescimento
-darkening_strength = 0.15
+darkening_strength = 0.2
 #Rainbow effect - multiplicador de freq da função periódica
-rb_mult = 20
+rb_mult = 18
 #Rainbow effect - intensidade do efeito - 0=off
 rb_int = 0.3
+#bright comp
+bcomp = 1.3
 def bloom(input_img):
     base = cv2.cvtColor(input_img, cv2.COLOR_BGR2GRAY)
     scale = round(base.shape[1]/16)
@@ -62,7 +64,7 @@ def chromaDephase(input_img):
         scale = round(w/640)
         #chroma
         input_img[:, :, 1] = cv2.warpAffine(input_img[:, :, 1], np.float32([[1, 0, bleeding_level*scale], [0, 1, 0]]), (w, h))
-        input_img[:, :, 2] = cv2.warpAffine(input_img[:, :, 2], np.float32([[1, 0, bleeding_level*scale], [0, 1, 0]]), (w, h))        
+        input_img[:, :, 2] = cv2.warpAffine(input_img[:, :, 2], np.float32([[1, 0, -bleeding_level*scale], [0, 1, 0]]), (w, h))        
        
     return input_img
 
@@ -113,15 +115,17 @@ def colorRGB2YIQ(input_img):
     return yiq
 
 
-def scanline(img):
+def scanline(img, field):
     scanline_img = np.copy(img)
     w = img.shape[1]
     h = img.shape[0]
-    scanline_img = cv2.resize(scanline_img, (w, 480))    
+    scale = round(h/480)
+    print(scale)
     # Itera de duas em duas linhas
-    for i in range(0, scanline_img.shape[0], 2):
+    for i in range(field*scale, scanline_img.shape[0] - scale, 2*scale):
         # Diminui o brilho da linha
-        scanline_img[i] = scanline_img[i] * sl_intensity   
+        for j in range(scale):
+            scanline_img[i+j] *= sl_intensity   
     
     scanline_img = cv2.resize(scanline_img, (w, h))
     return scanline_img
@@ -200,20 +204,43 @@ def main():
 
     yiq = colorRGB2YIQ(input_img)
     yiq = chromaDephase(yiq)
-    yiq = blur(yiq)
     yiq = rainbowEffect(yiq)
+    yiq = blur(yiq)
     bgr = colorYIQRGB(yiq)
     noise_mask = gaussianNoiseMask(bgr.shape, grain_intensity)
     bgr = applyNoiseMask(bgr, noise_mask, grain_amount)    
+    bgr2 = scanline(bgr, 0)*bcomp
+    bgr2 = np.clip(bgr2, 0, 1)
+    bgr = scanline(bgr, 1)*bcomp
+    bgr = np.clip(bgr, 0, 1)
     bgr = bloom(bgr.astype(np.float32))
-    bgr = scanline(bgr)
     bgr = darkerBorders(bgr, darkening_strength)
     bgr = curvedBorders(bgr, curve_strength)
 
     print(f"--- {time.process_time() - start_time:.6f} seconds ---")
 
+    
+    '''bgr2 = bloom(bgr2.astype(np.float32))
+    bgr2 = darkerBorders(bgr2, darkening_strength)
+    bgr2 = curvedBorders(bgr2, curve_strength)
+    h, w, c = bgr.shape
+    output = cv2.VideoWriter('out.avi', cv2.VideoWriter_fourcc(*'MJPG'), 60, (w, h))
+
+    total_frames = 600
+    bgr = (bgr*255).astype(np.uint8)
+    bgr2 = (bgr2*255).astype(np.uint8)
+    # Alternar as imagens a cada quadro
+    for i in range(total_frames):
+        output.write(bgr)
+        #output.write(mixed)
+        output.write(bgr2)
+        #output.write(mixed)
+
+    # Libere o objeto VideoWriter
+    output.release()'''
+    
     cv2.imshow("final", bgr)
-    cv2.waitKey()        
+    cv2.waitKey()          
     cv2.imshow("inicial", input_img)
     cv2.waitKey()
     cv2.destroyAllWindows()
