@@ -182,8 +182,8 @@ def darkerBorders(img, strength):
     mask = np.clip(1 - strength * distance, 0, 1)
     
     # Aplica a máscara
-    for i in range(3):
-        img[:, :, i] *= mask
+    mask = np.stack((mask,) * 3, axis=-1)
+    img *= mask
     
     return img
 
@@ -198,7 +198,7 @@ def rainbowEffect(input_img):
     return input_img
 
 def main():
-    input_img = cv2.imread("05.png").astype(np.float32) / 255
+    input_img = cv2.imread("04.png").astype(np.float32) / 255
 
     start_time = time.process_time()
 
