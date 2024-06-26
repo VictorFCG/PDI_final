@@ -117,17 +117,14 @@ def colorRGB2YIQ(input_img):
 
 def scanline(img, field):
     scanline_img = np.copy(img)
-    w = img.shape[1]
-    h = img.shape[0]
-    scale = round(h/480)
+    scale = round(scanline_img.shape[0]/480)
     print(scale)
-    # Itera de duas em duas linhas
+    # Itera de duas em duas linhas/proporcional ao tamanho
     for i in range(field*scale, scanline_img.shape[0] - scale, 2*scale):
         # Diminui o brilho da linha
         for j in range(scale):
             scanline_img[i+j] *= sl_intensity   
     
-    scanline_img = cv2.resize(scanline_img, (w, h))
     return scanline_img
 
 
